@@ -13,7 +13,10 @@
 #include <math.h>
 #include <cuda.h>
 #include <string.h>
-#include "common/pgm.h"
+#include "./common/pgm.h"
+
+// #define _USE_MATH_DEFINES
+// #include <cmath>
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -172,6 +175,14 @@ int main (int argc, char **argv)
   printf("Done!\n");
 
   // TODO clean-up
+   // clean-up
+  cudaFree ((void *) d_in);
+  cudaFree ((void *) d_hough);
+  free (h_hough);
+  free (cpuht);
+  free (pcCos);
+  free (pcSin);
+  cudaDeviceReset ();
 
   return 0;
 }

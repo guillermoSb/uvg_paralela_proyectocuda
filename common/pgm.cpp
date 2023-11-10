@@ -8,6 +8,8 @@
  To build use  : 
  ============================================================================
  */
+
+#include <iostream> // ! Para tratar de arreglar
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
