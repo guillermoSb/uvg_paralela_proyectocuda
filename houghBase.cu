@@ -174,7 +174,6 @@ int main (int argc, char **argv)
   }
   printf("Done!\n");
 
-  // TODO clean-up
    // clean-up
   cudaFree ((void *) d_in);
   cudaFree ((void *) d_hough);
