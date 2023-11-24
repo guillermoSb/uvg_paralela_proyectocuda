@@ -8,6 +8,8 @@
  To build use  : make
  ============================================================================
  */
+
+#include "cuda_runtime.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -51,10 +53,6 @@ void CPU_HoughTran (unsigned char *pic, int w, int h, int **acc)
 }
 
 //*****************************************************************
-__constant__ float d_Cos[degreeBins];
-__constant__ float d_Sin[degreeBins];
-
-//*****************************************************************
 // GPU kernel. One thread per image pixel is spawned.
 // The accummulator memory needs to be allocated by the host in global memory
 __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float rMax, float rScale)
@@ -73,7 +71,8 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
   {
     for (int tIdx = 0; tIdx < degreeBins; tIdx++)
     {
-      float r = xCoord * d_Cos[tIdx] + yCoord * d_Sin[tIdx];
+      float theta = tIdx * radInc;
+      float r = xCoord * cos(theta) + yCoord * sin(theta);
       int rIdx = (r + rMax) / rScale;
       atomicAdd(&acc[rIdx * degreeBins + tIdx], 1);
     }
@@ -110,10 +109,6 @@ int main (int argc, char **argv)
   float rMax = sqrt (1.0 * w * w + 1.0 * h * h) / 2;
   float rScale = 2 * rMax / rBins;
 
-  // copy precomputed values to constant memory
-  cudaMemcpyToSymbol (d_Cos, pcCos, sizeof (float) * degreeBins);
-  cudaMemcpyToSymbol (d_Sin, pcSin, sizeof (float) * degreeBins);
-
   // setup and copy data from host to device
   unsigned char *d_in, *h_in;
   int *d_hough, *h_hough;
@@ -127,6 +122,13 @@ int main (int argc, char **argv)
   cudaMemcpy (d_in, h_in, sizeof (unsigned char) * w * h, cudaMemcpyHostToDevice);
   cudaMemset (d_hough, 0, sizeof (int) * degreeBins * rBins);
 
+  // ! ========================================================================
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start);
+  // ! ========================================================================
+
   // execution configuration uses a 1-D grid of 1-D blocks, each made of 256 threads
   int blockNum = ceil (w * h / 256);
   GPU_HoughTran <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale);
@@ -136,12 +138,25 @@ int main (int argc, char **argv)
   // get results from device
   cudaMemcpy (h_hough, d_hough, sizeof (int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
 
+  // ! ========================================================================
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  // ! ========================================================================
+
   // compare CPU and GPU results
   for (i = 0; i < degreeBins * rBins; i++)
     {
       if (cpuht[i] != h_hough[i])
         printf ("Calculation mismatch at : %i %i %i\n", i, cpuht[i], h_hough[i]);
     }
+
+  // ! ========================================================================
+  printf("Kernel execution time: %f milliseconds\n", milliseconds);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  // ! ========================================================================
 
   // clean-up
   cudaFree ((void *) d_in);
